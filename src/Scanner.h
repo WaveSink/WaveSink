@@ -17,6 +17,25 @@ public:
     explicit Scanner(QObject *parent = nullptr);
     ~Scanner();
 
+    QList<QString> getSinks() {
+        QMutexLocker locker(&m_mutex);
+        QList<QString> list;
+        for (auto it = m_deviceFlows.begin(); it != m_deviceFlows.end(); ++it) {
+            if (it.value() == eRender) list.append(it.key());
+        }
+        return list;
+    }
+
+    QList<QString> getSources() {
+        QMutexLocker locker(&m_mutex);
+        QList<QString> list;
+        for (auto it = m_deviceFlows.begin(); it != m_deviceFlows.end(); ++it) {
+            if (it.value() == eCapture) list.append(it.key());
+        }
+        list.append(m_sessions.keys());
+        return list;
+    }
+
 signals:
     void sinkAdded(const QString &id);
     void sinkRemoved(const QString &id);

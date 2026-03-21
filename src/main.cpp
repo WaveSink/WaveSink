@@ -1,5 +1,6 @@
 #include <QCoreApplication>
 #include <QDebug>
+#include <QTimer>
 #include "Scanner.h"
 
 int main(int argc, char *argv[])
@@ -24,6 +25,20 @@ int main(int argc, char *argv[])
 
     QObject::connect(&scanner, &Scanner::sourceRemoved, [](const QString &id){
         qDebug() << "Source Removed:" << id;
+    });
+
+    // Schedule a listing of devices after a short delay to allow enumeration
+    QTimer::singleShot(2000, &scanner, [&scanner](){
+        qDebug() << "\n--- Current Sinks ---";
+        for (const auto& sink : scanner.getSinks()) {
+            qDebug() << sink;
+        }
+
+        qDebug() << "\n--- Current Sources (Devices & Apps) ---";
+        for (const auto& source : scanner.getSources()) {
+            qDebug() << source;
+        }
+        qDebug() << "--------------------------------------\n";
     });
 
     return app.exec();
