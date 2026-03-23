@@ -121,6 +121,23 @@ void AudioRouter::RouterThread::stop()
     m_stopRequested = true;
 }
 
+// Helper to toggle mute on a device
+static void SetDeviceMute(IMMDeviceEnumerator* pEnumerator, const QString& devId, bool mute) {
+    if (!pEnumerator) return;
+    IMMDevice* pDev = nullptr;
+    // Note: The caller must ensure COM is initialized
+    HRESULT hr = pEnumerator->GetDevice(reinterpret_cast<LPCWSTR>(devId.utf16()), &pDev);
+    if (SUCCEEDED(hr)) {
+        IAudioEndpointVolume* pVol = nullptr;
+        hr = pDev->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol);
+        if (SUCCEEDED(hr)) {
+            pVol->SetMute(mute, nullptr);
+            pVol->Release();
+        }
+        pDev->Release();
+    }
+}
+
 void AudioRouter::RouterThread::run()
 {
     HRESULT hr = CoInitialize(nullptr);
@@ -148,6 +165,35 @@ void AudioRouter::RouterThread::run()
     if (SUCCEEDED(hr)) {
         // Capture from default render device (System Audio)
         hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    }
+
+    // Mute all active render devices initially to ensure no audio plays unless requested
+    if (SUCCEEDED(hr)) {
+        IMMDeviceCollection* pCollection = nullptr;
+        if (SUCCEEDED(pEnumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &pCollection))) {
+            UINT count = 0;
+            pCollection->GetCount(&count);
+            for (UINT i = 0; i < count; i++) {
+                IMMDevice* pEndpoint = nullptr;
+                if (SUCCEEDED(pCollection->Item(i, &pEndpoint))) {
+                    IAudioEndpointVolume* pVol = nullptr;
+                    if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
+                        pVol->SetMute(TRUE, nullptr);
+                        pVol->Release();
+                    }
+                    pEndpoint->Release();
+                }
+            }
+            pCollection->Release();
+        }
+    }
+
+    // Ensure any sinks that are already targets are unmuted immediately
+    if (SUCCEEDED(hr)) {
+        QMutexLocker locker(&m_mutex);
+        for (const QString& sinkId : m_targetSinks) {
+            SetDeviceMute(pEnumerator, sinkId, false);
+        }
     }
 
     if (SUCCEEDED(hr)) {
@@ -202,6 +248,9 @@ void AudioRouter::RouterThread::run()
             // Remove old sinks
             for (auto it = activeSinks.begin(); it != activeSinks.end(); ) {
                 if (!targets.contains((*it)->deviceId)) {
+                    // Mute the device being removed
+                    SetDeviceMute(pEnumerator, (*it)->deviceId, true);
+
                     (*it)->cleanup();
                     delete *it;
                     it = activeSinks.erase(it);
@@ -254,6 +303,8 @@ void AudioRouter::RouterThread::run()
                     if (SUCCEEDED(sHr)) {
                         ctx->valid = true;
                         activeSinks.append(ctx);
+                        // Unmute the device being added
+                        SetDeviceMute(pEnumerator, id, false);
                         qDebug() << "AudioRouter: Added sink" << id;
                     } else {
                         qWarning() << "AudioRouter: Failed to initialize sink" << id << "hr=" << sHr;

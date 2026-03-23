@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <endpointvolume.h>
 
 /**
  * @brief The AudioRouter class captures system audio (loopback) and routes it 
