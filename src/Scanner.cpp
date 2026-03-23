@@ -1,8 +1,43 @@
 #include "Scanner.h"
 #include <QDebug>
 #include <QMetaObject>
+#include <QFileInfo>
 #include <functiondiscoverykeys_devpkey.h>
 #include <audiopolicy.h>
+
+// Helper to get device friendly name
+static QString getDeviceFriendlyName(IMMDevice *pDevice) {
+    QString name = "Unknown Device";
+    IPropertyStore *pProps = nullptr;
+    HRESULT hr = pDevice->OpenPropertyStore(STGM_READ, &pProps);
+    if (SUCCEEDED(hr)) {
+        PROPVARIANT varName;
+        PropVariantInit(&varName);
+        hr = pProps->GetValue(PKEY_Device_FriendlyName, &varName);
+        if (SUCCEEDED(hr) && varName.vt == VT_LPWSTR) {
+            name = QString::fromWCharArray(varName.pwszVal);
+        }
+        PropVariantClear(&varName);
+        pProps->Release();
+    }
+    return name;
+}
+
+// Helper to get process name from PID
+static QString getProcessName(DWORD pid) {
+    QString name = QString("App:%1").arg(pid);
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (hProcess) {
+        WCHAR buffer[MAX_PATH];
+        DWORD size = MAX_PATH;
+        if (QueryFullProcessImageNameW(hProcess, 0, buffer, &size)) {
+            QString fullPath = QString::fromWCharArray(buffer);
+            name = QFileInfo(fullPath).fileName() + QString(" (%1)").arg(pid);
+        }
+        CloseHandle(hProcess);
+    }
+    return name;
+}
 
 // Helper class for monitoring individual audio sessions
 class SessionEvents : public IAudioSessionEvents {
@@ -147,6 +182,7 @@ void Scanner::cleanup()
         managersToRelease = m_sessionManagers.values();
         m_sessionManagers.clear();
         m_deviceFlows.clear();
+        m_deviceNames.clear();
     }
 
     // Perform COM cleanup without lock
@@ -216,8 +252,9 @@ void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
             if (m_deviceFlows.contains(id)) return;
         }
 
-        // Determine Flow
+        // Determine Flow and Name
         EDataFlow flow = eAll;
+        QString friendlyName;
         bool flowFound = false;
 
         IMMDevice *pDevice = nullptr;
@@ -230,6 +267,11 @@ void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
                 }
                 pEndpoint->Release();
             }
+            
+            if (flowFound) {
+                friendlyName = getDeviceFriendlyName(pDevice);
+            }
+            
             pDevice->Release();
         }
 
@@ -238,6 +280,7 @@ void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
             {
                 QMutexLocker locker(&m_mutex);
                 m_deviceFlows.insert(id, flow);
+                m_deviceNames.insert(id, friendlyName);
             }
             
             if (flow == eRender) emit sinkAdded(id);
@@ -265,6 +308,7 @@ void Scanner::handleDeviceRemoved(const QString &id)
         QMutexLocker locker(&m_mutex);
         if (m_deviceFlows.contains(id)) {
             flow = m_deviceFlows.take(id);
+            m_deviceNames.remove(id);
             found = true;
         }
         if (m_sessionManagers.contains(id)) {
@@ -291,6 +335,7 @@ void Scanner::handleSessionRemoved(const QString &sessionId)
         QMutexLocker locker(&m_mutex);
         if (m_sessions.contains(sessionId)) {
             events = m_sessions.take(sessionId);
+            m_deviceNames.remove(sessionId);
         }
     }
     
@@ -349,6 +394,7 @@ STDMETHODIMP Scanner::OnSessionCreated(IAudioSessionControl *NewSession)
         
         if (pid != 0) {
             QString sessionId = QString("App:%1").arg(pid);
+            QString processName = getProcessName(pid);
             
             QMutexLocker locker(&m_mutex);
             if (!m_sessions.contains(sessionId)) {
@@ -357,6 +403,8 @@ STDMETHODIMP Scanner::OnSessionCreated(IAudioSessionControl *NewSession)
                 
                 if (SUCCEEDED(hr)) {
                     m_sessions.insert(sessionId, events);
+                    m_deviceNames.insert(sessionId, processName);
+                    
                     AudioSessionState state;
                     if (SUCCEEDED(NewSession->GetState(&state)) && state == AudioSessionStateActive) {
                         // Signal is thread-safe

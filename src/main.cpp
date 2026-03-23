@@ -1,45 +1,79 @@
 #include <QCoreApplication>
+#include <QTextStream>
 #include <QDebug>
-#include <QTimer>
 #include "Scanner.h"
+#include "AudioRouter.h"
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
 
-    qDebug() << "Starting AudioMan Scanner Test...";
+    QTextStream out(stdout);
+    QTextStream in(stdin);
 
+    out << "========================================" << Qt::endl;
+    out << "       AudioMan Routing Test            " << Qt::endl;
+    out << "========================================" << Qt::endl;
+
+    // Initialize Scanner to find devices
     Scanner scanner;
+    
+    // Initialize Router
+    AudioRouter router;
 
-    QObject::connect(&scanner, &Scanner::sinkAdded, [](const QString &id){
-        qDebug() << "Sink Added:" << id;
-    });
+    // Get and list available sinks
+    out << "Scanning for output devices..." << Qt::endl;
+    QMap<QString, QString> sinks = scanner.getSinks();
 
-    QObject::connect(&scanner, &Scanner::sinkRemoved, [](const QString &id){
-        qDebug() << "Sink Removed:" << id;
-    });
+    if (sinks.isEmpty()) {
+        out << "No output devices found!" << Qt::endl;
+        return 0;
+    }
 
-    QObject::connect(&scanner, &Scanner::sourceAdded, [](const QString &id){
-        qDebug() << "Source Added:" << id;
-    });
+    out << "Available Sinks:" << Qt::endl;
+    for (auto it = sinks.begin(); it != sinks.end(); ++it) {
+        out << "----------------------------------------" << Qt::endl;
+        out << "Name: " << it.value() << Qt::endl;
+        out << "ID  : " << it.key() << Qt::endl;
+    }
+    out << "----------------------------------------" << Qt::endl;
 
-    QObject::connect(&scanner, &Scanner::sourceRemoved, [](const QString &id){
-        qDebug() << "Source Removed:" << id;
-    });
+    // Start the router (capturing system audio)
+    router.start();
+    out << Qt::endl << "Router started (Capturing System Audio)." << Qt::endl;
+    out << "Paste a Sink ID from the list above to route audio to it." << Qt::endl;
+    out << "You can add multiple sinks." << Qt::endl;
+    out << "Type 'exit' or 'quit' to stop." << Qt::endl;
 
-    // Schedule a listing of devices after a short delay to allow enumeration
-    QTimer::singleShot(2000, &scanner, [&scanner](){
-        qDebug() << "\n--- Current Sinks ---";
-        for (const auto& sink : scanner.getSinks()) {
-            qDebug() << sink;
+    // Command loop
+    while (true) {
+        out << Qt::endl << "Enter Sink ID: " << Qt::flush;
+        QString line = in.readLine();
+
+        if (line.isNull()) break;
+        
+        QString input = line.trimmed();
+        
+        if (input.compare("exit", Qt::CaseInsensitive) == 0 || 
+            input.compare("quit", Qt::CaseInsensitive) == 0) {
+            break;
         }
 
-        qDebug() << "\n--- Current Sources (Devices & Apps) ---";
-        for (const auto& source : scanner.getSources()) {
-            qDebug() << source;
-        }
-        qDebug() << "--------------------------------------\n";
-    });
+        if (input.isEmpty()) continue;
 
-    return app.exec();
+        // Check if it's a known sink for better feedback
+        if (sinks.contains(input)) {
+            out << "Adding sink: " << sinks[input] << Qt::endl;
+        } else {
+            out << "Adding sink with ID: " << input << Qt::endl;
+        }
+
+        router.addSink(input);
+        out << "Audio should now be playing on this device." << Qt::endl;
+    }
+
+    out << "Stopping router..." << Qt::endl;
+    router.stop();
+
+    return 0;
 }

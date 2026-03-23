@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QMap>
 #include <QMutex>
+#include <QList>
 #include <windows.h>
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
@@ -17,23 +18,33 @@ public:
     explicit Scanner(QObject *parent = nullptr);
     ~Scanner();
 
-    QList<QString> getSinks() {
+    // Returns ID -> Name map
+    QMap<QString, QString> getSinks() {
         QMutexLocker locker(&m_mutex);
-        QList<QString> list;
+        QMap<QString, QString> map;
         for (auto it = m_deviceFlows.begin(); it != m_deviceFlows.end(); ++it) {
-            if (it.value() == eRender) list.append(it.key());
+            if (it.value() == eRender) {
+                // If name isn't found, fallback to ID
+                map.insert(it.key(), m_deviceNames.value(it.key(), it.key()));
+            }
         }
-        return list;
+        return map;
     }
 
-    QList<QString> getSources() {
+    // Returns ID -> Name map
+    QMap<QString, QString> getSources() {
         QMutexLocker locker(&m_mutex);
-        QList<QString> list;
+        QMap<QString, QString> map;
         for (auto it = m_deviceFlows.begin(); it != m_deviceFlows.end(); ++it) {
-            if (it.value() == eCapture) list.append(it.key());
+            if (it.value() == eCapture) {
+                map.insert(it.key(), m_deviceNames.value(it.key(), it.key()));
+            }
         }
-        list.append(m_sessions.keys());
-        return list;
+        // Add active application sessions
+        for (auto it = m_sessions.begin(); it != m_sessions.end(); ++it) {
+             map.insert(it.key(), m_deviceNames.value(it.key(), it.key()));
+        }
+        return map;
     }
 
 signals:
@@ -66,18 +77,21 @@ private:
 
     void initialize();
     void cleanup();
-    
+
     void setupSessionMonitoring(const QString &deviceId);
 
     LONG m_refCount;
     IMMDeviceEnumerator *m_enumerator;
-    
+
     // Device ID -> Flow
     QMap<QString, EDataFlow> m_deviceFlows;
-    
+
+    // Device ID -> Name (Friendly Name)
+    QMap<QString, QString> m_deviceNames;
+
     // Device ID -> Session Manager
     QMap<QString, IAudioSessionManager2*> m_sessionManagers;
-    
+
     // Session ID -> Event Listener
     QMap<QString, SessionEvents*> m_sessions;
 

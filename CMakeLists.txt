@@ -18,6 +18,8 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/Scanner.h
     src/Scanner.cpp
+    src/AudioRouter.h
+    src/AudioRouter.cpp
 )
 
 # Link Qt and Windows Native Libraries
