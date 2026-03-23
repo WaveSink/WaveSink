@@ -162,9 +162,18 @@ void AudioRouter::RouterThread::run()
     hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, 
                           __uuidof(IMMDeviceEnumerator), (void**)&pEnumerator);
     
+    QString captureId;
     if (SUCCEEDED(hr)) {
         // Capture from default render device (System Audio)
         hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+        if (SUCCEEDED(hr)) {
+            LPWSTR wstrId = nullptr;
+            pDevice->GetId(&wstrId);
+            if (wstrId) {
+                captureId = QString::fromWCharArray(wstrId);
+                CoTaskMemFree(wstrId);
+            }
+        }
     }
 
     // Mute all active render devices initially to ensure no audio plays unless requested
@@ -176,10 +185,17 @@ void AudioRouter::RouterThread::run()
             for (UINT i = 0; i < count; i++) {
                 IMMDevice* pEndpoint = nullptr;
                 if (SUCCEEDED(pCollection->Item(i, &pEndpoint))) {
-                    IAudioEndpointVolume* pVol = nullptr;
-                    if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
-                        pVol->SetMute(TRUE, nullptr);
-                        pVol->Release();
+                    LPWSTR wstrId = nullptr;
+                    pEndpoint->GetId(&wstrId);
+                    QString id = QString::fromWCharArray(wstrId);
+                    CoTaskMemFree(wstrId);
+
+                    if (id != captureId) {
+                        IAudioEndpointVolume* pVol = nullptr;
+                        if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
+                            pVol->SetMute(TRUE, nullptr);
+                            pVol->Release();
+                        }
                     }
                     pEndpoint->Release();
                 }
@@ -261,6 +277,12 @@ void AudioRouter::RouterThread::run()
 
             // Add new sinks
             for (const QString& id : targets) {
+                if (id == captureId) {
+                    SetDeviceMute(pEnumerator, id, false);
+                    qWarning() << "AudioRouter: Skipping sink" << id << "to prevent feedback loop.";
+                    continue;
+                }
+
                 bool exists = false;
                 for (auto* ctx : activeSinks) {
                     if (ctx->deviceId == id) { exists = true; break; }
