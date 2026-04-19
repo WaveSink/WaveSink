@@ -3,6 +3,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -60,7 +61,7 @@ void MainWindow::setupUi()
     QHBoxLayout *volumeLayout = new QHBoxLayout();
     QLabel *volTextLabel = new QLabel("Volume", m_detailsWidget);
     m_volumeLabel = new QLabel("100%", m_detailsWidget);
-    
+
     volumeLayout->addWidget(volTextLabel);
     volumeLayout->addStretch();
     volumeLayout->addWidget(m_volumeLabel);
@@ -72,8 +73,49 @@ void MainWindow::setupUi()
     connect(m_volumeSlider, &QSlider::valueChanged, this, &MainWindow::onVolumeChanged);
     detailsLayout->addWidget(m_volumeSlider);
 
+    m_eqToggleButton = new QPushButton("Equalizer ▼", m_detailsWidget);
+    m_eqToggleButton->setCheckable(true);
+    connect(m_eqToggleButton, &QPushButton::toggled, this, &MainWindow::onEqToggled);
+    detailsLayout->addWidget(m_eqToggleButton, 0, Qt::AlignLeft);
+
+    m_eqContainer = new QWidget(m_detailsWidget);
+    QVBoxLayout *eqContainerLayout = new QVBoxLayout(m_eqContainer);
+    eqContainerLayout->setContentsMargins(0, 0, 0, 0);
+
+    QHBoxLayout *eqLayout = new QHBoxLayout();
+    eqLayout->setSpacing(10);
+
+    QStringList freqLabels = {"60Hz", "230Hz", "910Hz", "3kHz", "14kHz"};
+
+    for (int i = 0; i < 5; ++i) {
+        QVBoxLayout *bandLayout = new QVBoxLayout();
+        QSlider *slider = new QSlider(Qt::Vertical, m_detailsWidget);
+        slider->setRange(0, 100);
+        slider->setValue(50);
+        slider->setMinimumHeight(60);
+        connect(slider, &QSlider::valueChanged, this, &MainWindow::onEqValueChanged);
+
+        QLabel *freqLabel = new QLabel(freqLabels[i], m_detailsWidget);
+        QFont f = freqLabel->font();
+        f.setPointSize(7);
+        freqLabel->setFont(f);
+        freqLabel->setAlignment(Qt::AlignCenter);
+
+        bandLayout->addWidget(slider, 0, Qt::AlignHCenter);
+        bandLayout->addWidget(freqLabel);
+
+        eqLayout->addLayout(bandLayout);
+        m_eqSliders.append(slider);
+    }
+
+    eqLayout->addStretch(1);
+
+    eqContainerLayout->addLayout(eqLayout);
+    detailsLayout->addWidget(m_eqContainer);
+    m_eqContainer->setVisible(false);
+
     layout->addWidget(m_detailsWidget);
-    
+
     m_detailsAnimation = new QPropertyAnimation(m_detailsWidget, "maximumHeight", this);
     m_detailsAnimation->setDuration(200);
     m_detailsWidget->setMaximumHeight(0);
@@ -127,12 +169,24 @@ void MainWindow::onSinkSelected(const QString &id)
     m_volumeSlider->blockSignals(false);
     m_volumeLabel->setText(QString::number(int(vol * 100)) + "%");
 
+    if (!m_eqSettings.contains(id)) {
+        m_eqSettings.insert(id, {50, 50, 50, 50, 50});
+    }
+    QList<int> currentEq = m_eqSettings.value(id);
+    for (int i = 0; i < 5 && i < m_eqSliders.size(); ++i) {
+        m_eqSliders[i]->blockSignals(true);
+        m_eqSliders[i]->setValue(currentEq[i]);
+        m_eqSliders[i]->blockSignals(false);
+    }
+
     // Expand details if not already
     if (m_detailsWidget->maximumHeight() == 0) {
         m_detailsWidget->show();
         m_detailsAnimation->setStartValue(0);
         m_detailsAnimation->setEndValue(m_detailsWidget->sizeHint().height());
         m_detailsAnimation->start();
+    } else {
+        m_detailsWidget->setMaximumHeight(m_detailsWidget->sizeHint().height());
     }
 }
 
@@ -154,4 +208,30 @@ void MainWindow::onVolumeChanged(int value)
     float vol = value / 100.0f;
     m_controller->setVolume(m_currentSinkId, vol);
     m_volumeLabel->setText(QString::number(value) + "%");
+}
+
+void MainWindow::onEqValueChanged()
+{
+    if (m_currentSinkId.isEmpty()) return;
+
+    QList<int> values;
+    for (QSlider *slider : m_eqSliders) {
+        values.append(slider->value());
+    }
+    m_eqSettings.insert(m_currentSinkId, values);
+    m_router->setEqualizer(m_currentSinkId, values);
+}
+
+void MainWindow::onEqToggled(bool checked)
+{
+    m_eqContainer->setVisible(checked);
+    m_eqToggleButton->setText(checked ? "Equalizer ▲" : "Equalizer ▼");
+
+    m_detailsWidget->layout()->invalidate();
+
+    if (m_detailsWidget->maximumHeight() > 0) {
+        m_detailsWidget->setMaximumHeight(m_detailsWidget->sizeHint().height());
+    }
+
+    adjustSize();
 }

@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QMap>
+#include <QList>
 #include <QCheckBox>
 #include <QSlider>
 #include <QLabel>
@@ -26,6 +27,8 @@ private slots:
     void onSinkSelected(const QString &id);
     void onPlayToggled(bool checked);
     void onVolumeChanged(int value);
+    void onEqValueChanged();
+    void onEqToggled(bool checked);
 
 private:
     void setupUi();
@@ -43,4 +46,10 @@ private:
     QSlider *m_volumeSlider;
     QLabel *m_volumeLabel;
     QPropertyAnimation *m_detailsAnimation;
+
+    class QPushButton *m_eqToggleButton;
+    QWidget *m_eqContainer;
+
+    QList<QSlider*> m_eqSliders;
+    QMap<QString, QList<int>> m_eqSettings;
 };

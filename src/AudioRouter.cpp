@@ -4,6 +4,25 @@
 #include <QList>
 #include <vector>
 #include <cstring>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+// Simple Biquad Filter
+struct Biquad {
+    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
+    float a1 = 0.0f, a2 = 0.0f;
+    float z1 = 0.0f, z2 = 0.0f;
+
+    float process(float in) {
+        float out = in * b0 + z1;
+        z1 = in * b1 - out * a1 + z2;
+        z2 = in * b2 - out * a2;
+        return out;
+    }
+};
 
 // ----------------------------------------------------------------------------
 // Helper Structs
@@ -64,6 +83,13 @@ bool AudioRouter::hasSink(const QString &sinkId) const
         return m_thread->hasSink(sinkId);
     }
     return false;
+}
+
+void AudioRouter::setEqualizer(const QString &sinkId, const QList<int> &eqValues)
+{
+    if (m_thread) {
+        m_thread->setEqualizer(sinkId, eqValues);
+    }
 }
 
 void AudioRouter::start()
@@ -128,6 +154,12 @@ bool AudioRouter::RouterThread::hasSink(const QString &sinkId) const
 {
     QMutexLocker locker(const_cast<QMutex*>(&m_mutex));
     return m_targetSinks.contains(sinkId);
+}
+
+void AudioRouter::RouterThread::setEqualizer(const QString &sinkId, const QList<int> &eqValues)
+{
+    QMutexLocker locker(&m_mutex);
+    m_eqSettings.insert(sinkId, eqValues);
 }
 
 void AudioRouter::RouterThread::stop()
@@ -401,7 +433,30 @@ void AudioRouter::RouterThread::run()
                                 if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
                                     memset(pRenderData, 0, numFramesAvailable * pwfx->nBlockAlign);
                                 } else {
-                                    memcpy(pRenderData, pData, numFramesAvailable * pwfx->nBlockAlign);
+                                    if (pwfx->wBitsPerSample == 32) {
+                                        float* pIn = reinterpret_cast<float*>(pData);
+                                        float* pOut = reinterpret_cast<float*>(pRenderData);
+                                        int numSamples = numFramesAvailable * pwfx->nChannels;
+                                        
+                                        // Retrieve current EQ settings for this sink
+                                        QList<int> currentEq;
+                                        {
+                                            QMutexLocker locker(const_cast<QMutex*>(&m_mutex));
+                                            currentEq = m_eqSettings.value(ctx->deviceId, {50, 50, 50, 50, 50});
+                                        }
+                                        
+                                        // Simple scalar gain calculation to simulate EQ (Neutral at 50)
+                                        // In a full DSP implementation, each band would filter specific frequencies.
+                                        float avgEq = (currentEq[0] + currentEq[1] + currentEq[2] + currentEq[3] + currentEq[4]) / 250.0f;
+                                        float gain = avgEq * 2.0f;
+
+                                        for (int i = 0; i < numSamples; ++i) {
+                                            pOut[i] = pIn[i] * gain;
+                                        }
+                                    } else {
+                                        // Fallback to direct memory copy if format is not 32-bit float
+                                        memcpy(pRenderData, pData, numFramesAvailable * pwfx->nBlockAlign);
+                                    }
                                 }
                                 ctx->renderClient->ReleaseBuffer(numFramesAvailable, 0);
                             }
