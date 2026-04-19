@@ -4,6 +4,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QIcon>
 #include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -30,7 +31,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::setupUi()
 {
-    setWindowTitle("AudioMan - Sink Manager");
+    setWindowTitle("WaveSink");
+    setWindowIcon(QIcon(":/icon.png"));
 
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);

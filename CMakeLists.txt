@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(AudioMan VERSION 1.0 LANGUAGES CXX)
+project(WaveSink VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,8 +13,13 @@ set(CMAKE_AUTOUIC ON)
 # Adjust components based on whether you are using Widgets, QML/Quick, etc.
 find_package(Qt6 6.10 REQUIRED COMPONENTS Core Gui Widgets)
 
+# Generate an RC file for the application icon
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/app_icon.rc" "IDI_ICON1 ICON \"${CMAKE_CURRENT_SOURCE_DIR}/src/icon/icon.ico\"\n")
+
 # Add your source files
-add_executable(${PROJECT_NAME}
+add_executable(${PROJECT_NAME} WIN32
+    ${CMAKE_CURRENT_BINARY_DIR}/app_icon.rc
+    src/icon/resources.qrc
     src/main.cpp
     src/Scanner.h
     src/Scanner.cpp

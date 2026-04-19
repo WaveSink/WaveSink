@@ -2,7 +2,7 @@
 setlocal
 
 set QT_PATH=Qt\6.10.3\msvc2022_64
-set PROJECT_NAME=AudioMan
+set PROJECT_NAME=WaveSink
 set BUILD_DIR=build
 set BUILD_NINJA=build-ninja
 set EXE_PATH=%BUILD_DIR%\Release\%PROJECT_NAME%.exe
