@@ -15,14 +15,14 @@ WaveSink is a lightweight and elegant audio routing utility for Windows. It allo
 
 ## Installation
 
-1. Go to the **Releases** tab of this repository.
+1. Go to the [Releases](https://github.com/WaveSink/WaveSink/releases/tag/v1.0.0) tab of this repository.
 2. Download the latest `WaveSink_Installer.exe` setup file.
 3. Run the installer and follow the on-screen instructions.
 4. Launch WaveSink from your Start menu or desktop shortcut.
 
 ## Screenshots
 
-*(Add screenshots of the application here)*
+![WaveSink Screenshot](assets/screenshot.png)
 
 ## License
 
