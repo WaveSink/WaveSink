@@ -237,10 +237,12 @@ void AudioRouter::RouterThread::run()
                     QString id = QString::fromWCharArray(wstrId);
                     CoTaskMemFree(wstrId);
 
-                    IAudioEndpointVolume* pVol = nullptr;
-                    if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
-                        pVol->SetMute(TRUE, nullptr);
-                        pVol->Release();
+                    if (id != captureId) {
+                        IAudioEndpointVolume* pVol = nullptr;
+                        if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
+                            pVol->SetMute(TRUE, nullptr);
+                            pVol->Release();
+                        }
                     }
                     pEndpoint->Release();
                 }
@@ -309,7 +311,9 @@ void AudioRouter::RouterThread::run()
             QSet<QString> removedTargets = activeTargetIds;
             removedTargets.subtract(targets);
             for (const QString& id : removedTargets) {
-                SetDeviceMute(pEnumerator, id, true);
+                if (id != captureId) {
+                    SetDeviceMute(pEnumerator, id, true);
+                }
             }
             activeTargetIds = targets;
 
