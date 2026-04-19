@@ -47,6 +47,12 @@ public:
         return map;
     }
 
+    // Returns FormFactor (EndpointFormFactor enum value)
+    uint getFormFactor(const QString &id) {
+        QMutexLocker locker(&m_mutex);
+        return m_deviceFormFactors.value(id, 10); // 10 = UnknownFormFactor
+    }
+
 signals:
     void sinkAdded(const QString &id);
     void sinkRemoved(const QString &id);
@@ -88,6 +94,9 @@ private:
 
     // Device ID -> Name (Friendly Name)
     QMap<QString, QString> m_deviceNames;
+
+    // Device ID -> Form Factor
+    QMap<QString, uint> m_deviceFormFactors;
 
     // Device ID -> Session Manager
     QMap<QString, IAudioSessionManager2*> m_sessionManagers;

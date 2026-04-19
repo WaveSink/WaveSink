@@ -22,6 +22,12 @@ add_executable(${PROJECT_NAME}
     src/AudioRouter.cpp
     src/AudioController.h
     src/AudioController.cpp
+    src/gui/MainWindow.h
+    src/gui/MainWindow.cpp
+    src/gui/SinkListWidget.h
+    src/gui/SinkListWidget.cpp
+    src/gui/SinkItemWidget.h
+    src/gui/SinkItemWidget.cpp
 )
 
 # Link Qt and Windows Native Libraries

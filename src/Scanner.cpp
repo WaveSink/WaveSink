@@ -1,3 +1,5 @@
+#include <initguid.h>
+#include <mmdeviceapi.h>
 #include "Scanner.h"
 #include <QDebug>
 #include <QMetaObject>
@@ -21,6 +23,24 @@ static QString getDeviceFriendlyName(IMMDevice *pDevice) {
         pProps->Release();
     }
     return name;
+}
+
+// Helper to get device form factor
+static uint getDeviceFormFactor(IMMDevice *pDevice) {
+    uint formFactor = 10; // UnknownFormFactor
+    IPropertyStore *pProps = nullptr;
+    HRESULT hr = pDevice->OpenPropertyStore(STGM_READ, &pProps);
+    if (SUCCEEDED(hr)) {
+        PROPVARIANT varFF;
+        PropVariantInit(&varFF);
+        hr = pProps->GetValue(PKEY_AudioEndpoint_FormFactor, &varFF);
+        if (SUCCEEDED(hr) && varFF.vt == VT_UI4) {
+            formFactor = varFF.ulVal;
+        }
+        PropVariantClear(&varFF);
+        pProps->Release();
+    }
+    return formFactor;
 }
 
 // Helper to get process name from PID
@@ -183,6 +203,7 @@ void Scanner::cleanup()
         m_sessionManagers.clear();
         m_deviceFlows.clear();
         m_deviceNames.clear();
+        m_deviceFormFactors.clear();
     }
 
     // Perform COM cleanup without lock
@@ -255,6 +276,7 @@ void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
         // Determine Flow and Name
         EDataFlow flow = eAll;
         QString friendlyName;
+        uint formFactor = 10;
         bool flowFound = false;
 
         IMMDevice *pDevice = nullptr;
@@ -270,6 +292,7 @@ void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
             
             if (flowFound) {
                 friendlyName = getDeviceFriendlyName(pDevice);
+                formFactor = getDeviceFormFactor(pDevice);
             }
             
             pDevice->Release();
@@ -281,6 +304,7 @@ void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
                 QMutexLocker locker(&m_mutex);
                 m_deviceFlows.insert(id, flow);
                 m_deviceNames.insert(id, friendlyName);
+                m_deviceFormFactors.insert(id, formFactor);
             }
             
             if (flow == eRender) emit sinkAdded(id);
@@ -309,6 +333,7 @@ void Scanner::handleDeviceRemoved(const QString &id)
         if (m_deviceFlows.contains(id)) {
             flow = m_deviceFlows.take(id);
             m_deviceNames.remove(id);
+            m_deviceFormFactors.remove(id);
             found = true;
         }
         if (m_sessionManagers.contains(id)) {

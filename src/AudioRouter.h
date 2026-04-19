@@ -35,6 +35,13 @@ public:
     void removeSink(const QString &sinkId);
 
     /**
+     * @brief Check if a sink device is currently added to the router.
+     * @param sinkId The device ID string.
+     * @return True if the sink is added, false otherwise.
+     */
+    bool hasSink(const QString &sinkId) const;
+
+    /**
      * @brief Start routing audio.
      * Begins capturing system loopback and playing to all added sinks.
      */
@@ -60,6 +67,7 @@ private:
 
         void addSink(const QString &sinkId);
         void removeSink(const QString &sinkId);
+        bool hasSink(const QString &sinkId) const;
         void stop();
 
     protected:

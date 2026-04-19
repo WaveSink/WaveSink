@@ -58,6 +58,14 @@ void AudioRouter::removeSink(const QString &sinkId)
     }
 }
 
+bool AudioRouter::hasSink(const QString &sinkId) const
+{
+    if (m_thread) {
+        return m_thread->hasSink(sinkId);
+    }
+    return false;
+}
+
 void AudioRouter::start()
 {
     if (isRunning()) return;
@@ -116,6 +124,12 @@ void AudioRouter::RouterThread::removeSink(const QString &sinkId)
     }
 }
 
+bool AudioRouter::RouterThread::hasSink(const QString &sinkId) const
+{
+    QMutexLocker locker(const_cast<QMutex*>(&m_mutex));
+    return m_targetSinks.contains(sinkId);
+}
+
 void AudioRouter::RouterThread::stop()
 {
     m_stopRequested = true;
@@ -157,6 +171,7 @@ void AudioRouter::RouterThread::run()
     DWORD flags;
 
     QList<RenderClientContext*> activeSinks;
+    QSet<QString> activeTargetIds;
 
     // 1. Initialize System Loopback Capture
     hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, 
@@ -190,12 +205,10 @@ void AudioRouter::RouterThread::run()
                     QString id = QString::fromWCharArray(wstrId);
                     CoTaskMemFree(wstrId);
 
-                    if (id != captureId) {
-                        IAudioEndpointVolume* pVol = nullptr;
-                        if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
-                            pVol->SetMute(TRUE, nullptr);
-                            pVol->Release();
-                        }
+                    IAudioEndpointVolume* pVol = nullptr;
+                    if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
+                        pVol->SetMute(TRUE, nullptr);
+                        pVol->Release();
                     }
                     pEndpoint->Release();
                 }
@@ -261,12 +274,16 @@ void AudioRouter::RouterThread::run()
                 m_sinksChanged = false;
             }
 
+            QSet<QString> removedTargets = activeTargetIds;
+            removedTargets.subtract(targets);
+            for (const QString& id : removedTargets) {
+                SetDeviceMute(pEnumerator, id, true);
+            }
+            activeTargetIds = targets;
+
             // Remove old sinks
             for (auto it = activeSinks.begin(); it != activeSinks.end(); ) {
                 if (!targets.contains((*it)->deviceId)) {
-                    // Mute the device being removed
-                    SetDeviceMute(pEnumerator, (*it)->deviceId, true);
-
                     (*it)->cleanup();
                     delete *it;
                     it = activeSinks.erase(it);
@@ -279,7 +296,7 @@ void AudioRouter::RouterThread::run()
             for (const QString& id : targets) {
                 if (id == captureId) {
                     SetDeviceMute(pEnumerator, id, false);
-                    qWarning() << "AudioRouter: Skipping sink" << id << "to prevent feedback loop.";
+                    qWarning() << "AudioRouter: Unmuting capture device as it is selected as a sink.";
                     continue;
                 }
 
