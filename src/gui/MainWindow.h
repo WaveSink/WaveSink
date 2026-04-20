@@ -29,6 +29,11 @@ private slots:
     void onVolumeChanged(int value);
     void onEqValueChanged();
     void onEqToggled(bool checked);
+    void onDefaultDeviceChanged(const QString &id);
+
+private:
+    class QLabel *m_defaultDeviceLabel;
+    QString m_defaultSinkId;
 
 private:
     void setupUi();

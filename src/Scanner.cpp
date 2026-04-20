@@ -259,10 +259,44 @@ STDMETHODIMP Scanner::OnDeviceRemoved(LPCWSTR pwstrDeviceId)
     return S_OK;
 }
 
-STDMETHODIMP Scanner::OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR pwstrDefaultDeviceId) { return S_OK; }
+STDMETHODIMP Scanner::OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR pwstrDefaultDeviceId)
+{
+    if (flow == eRender && role == eConsole && pwstrDefaultDeviceId) {
+        QString id = QString::fromWCharArray(pwstrDefaultDeviceId);
+        QMetaObject::invokeMethod(this, "handleDefaultDeviceChanged", Qt::QueuedConnection, Q_ARG(QString, id));
+    }
+    return S_OK;
+}
 STDMETHODIMP Scanner::OnPropertyValueChanged(LPCWSTR pwstrDeviceId, const PROPERTYKEY key) { return S_OK; }
 
 // Main thread slots
+
+QString Scanner::getDefaultSink()
+{
+    QString defaultId;
+    IMMDeviceEnumerator *pEnum = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&pEnum);
+    if (SUCCEEDED(hr)) {
+        IMMDevice *pDevice = nullptr;
+        hr = pEnum->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+        if (SUCCEEDED(hr)) {
+            LPWSTR wstrId = nullptr;
+            pDevice->GetId(&wstrId);
+            if (wstrId) {
+                defaultId = QString::fromWCharArray(wstrId);
+                CoTaskMemFree(wstrId);
+            }
+            pDevice->Release();
+        }
+        pEnum->Release();
+    }
+    return defaultId;
+}
+
+void Scanner::handleDefaultDeviceChanged(const QString &id)
+{
+    emit defaultDeviceChanged(id);
+}
 
 void Scanner::handleDeviceStateChanged(const QString &id, unsigned long state)
 {

@@ -18,6 +18,15 @@ public:
     explicit Scanner(QObject *parent = nullptr);
     ~Scanner();
 
+signals:
+    void defaultDeviceChanged(const QString &id);
+
+public slots:
+    void handleDefaultDeviceChanged(const QString &id);
+
+public:
+    QString getDefaultSink();
+
     // Returns ID -> Name map
     QMap<QString, QString> getSinks() {
         QMutexLocker locker(&m_mutex);

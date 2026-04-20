@@ -18,7 +18,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_scanner, &Scanner::sinkAdded, this, &MainWindow::onSinkAdded);
     connect(m_scanner, &Scanner::sinkRemoved, this, &MainWindow::onSinkRemoved);
+    connect(m_scanner, &Scanner::defaultDeviceChanged, this, &MainWindow::onDefaultDeviceChanged);
     connect(m_sinkList, &SinkListWidget::sinkSelected, this, &MainWindow::onSinkSelected);
+
+    m_defaultSinkId = m_scanner->getDefaultSink();
 
     loadInitialSinks();
     m_router->start();
@@ -59,6 +62,14 @@ void MainWindow::setupUi()
     m_playCheckBox = new QCheckBox("Play on this device", m_detailsWidget);
     connect(m_playCheckBox, &QCheckBox::toggled, this, &MainWindow::onPlayToggled);
     detailsLayout->addWidget(m_playCheckBox);
+
+    m_defaultDeviceLabel = new QLabel("", m_detailsWidget);
+    m_defaultDeviceLabel->setWordWrap(true);
+    QFont labelFont = m_defaultDeviceLabel->font();
+    labelFont.setItalic(true);
+    m_defaultDeviceLabel->setFont(labelFont);
+    m_defaultDeviceLabel->setStyleSheet("color: gray;");
+    detailsLayout->addWidget(m_defaultDeviceLabel);
 
     QHBoxLayout *volumeLayout = new QHBoxLayout();
     QLabel *volTextLabel = new QLabel("Volume", m_detailsWidget);
@@ -160,10 +171,20 @@ void MainWindow::onSinkSelected(const QString &id)
     m_currentSinkId = id;
 
     // Update UI based on sink status
-    bool isActive = m_router->hasSink(id);
+    bool isDefault = (id == m_defaultSinkId);
+    bool isActive = m_router->hasSink(id) || isDefault;
+    
     m_playCheckBox->blockSignals(true);
     m_playCheckBox->setChecked(isActive);
+    m_playCheckBox->setEnabled(!isDefault);
     m_playCheckBox->blockSignals(false);
+
+    if (isDefault) {
+        m_defaultDeviceLabel->setText("This is the default audio device. Use Windows Settings to change the default device.");
+        m_defaultDeviceLabel->setVisible(true);
+    } else {
+        m_defaultDeviceLabel->setVisible(false);
+    }
 
     float vol = m_controller->getVolume(id);
     m_volumeSlider->blockSignals(true);
@@ -201,6 +222,17 @@ void MainWindow::onPlayToggled(bool checked)
     } else {
         m_router->removeSink(m_currentSinkId);
     }
+}
+
+void MainWindow::onDefaultDeviceChanged(const QString &id)
+{
+    m_defaultSinkId = id;
+    if (m_currentSinkId == id) {
+        onSinkSelected(id); // Refresh UI to update checkbox and button states
+    }
+
+    m_router->stop();
+    m_router->start();
 }
 
 void MainWindow::onVolumeChanged(int value)

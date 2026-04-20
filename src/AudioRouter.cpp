@@ -65,6 +65,7 @@ AudioRouter::~AudioRouter()
 
 void AudioRouter::addSink(const QString &sinkId)
 {
+    m_targetSinks.insert(sinkId);
     if (m_thread) {
         m_thread->addSink(sinkId);
     }
@@ -72,6 +73,7 @@ void AudioRouter::addSink(const QString &sinkId)
 
 void AudioRouter::removeSink(const QString &sinkId)
 {
+    m_targetSinks.remove(sinkId);
     if (m_thread) {
         m_thread->removeSink(sinkId);
     }
@@ -82,11 +84,17 @@ bool AudioRouter::hasSink(const QString &sinkId) const
     if (m_thread) {
         return m_thread->hasSink(sinkId);
     }
-    return false;
+    return m_targetSinks.contains(sinkId);
+}
+
+QSet<QString> AudioRouter::getSinks() const
+{
+    return m_targetSinks;
 }
 
 void AudioRouter::setEqualizer(const QString &sinkId, const QList<int> &eqValues)
 {
+    m_eqSettings.insert(sinkId, eqValues);
     if (m_thread) {
         m_thread->setEqualizer(sinkId, eqValues);
     }
@@ -97,6 +105,12 @@ void AudioRouter::start()
     if (isRunning()) return;
 
     m_thread = new RouterThread(this);
+    for (const QString &sinkId : m_targetSinks) {
+        m_thread->addSink(sinkId);
+    }
+    for (auto it = m_eqSettings.begin(); it != m_eqSettings.end(); ++it) {
+        m_thread->setEqualizer(it.key(), it.value());
+    }
     m_thread->start();
 }
 

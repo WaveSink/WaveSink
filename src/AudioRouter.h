@@ -44,6 +44,12 @@ public:
     bool hasSink(const QString &sinkId) const;
 
     /**
+     * @brief Get all target sinks.
+     * @return Set of target sink IDs.
+     */
+    QSet<QString> getSinks() const;
+
+    /**
      * @brief Set equalizer values for a sink.
      * @param sinkId The device ID string.
      * @param eqValues List of 5 equalizer band values (0-100).
@@ -92,4 +98,6 @@ private:
     };
 
     RouterThread *m_thread;
+    QSet<QString> m_targetSinks;
+    QMap<QString, QList<int>> m_eqSettings;
 };
