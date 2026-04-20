@@ -1,6 +1,6 @@
 @echo off
 
-set EXE=.\build\Release\AudioMan.exe
+set EXE=.\build\Release\WaveSink.exe
 set COMPILE_SCRIPT=.\compile.bat
 
 call "%COMPILE_SCRIPT%"

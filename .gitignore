@@ -1,3 +1,6 @@
 Qt/
 build/
 compile_commands.json
+installer
+CMakeCache.txt
+CMakeFiles

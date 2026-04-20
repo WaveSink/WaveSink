@@ -223,41 +223,9 @@ void AudioRouter::RouterThread::run()
         }
     }
 
-    // Mute all active render devices initially to ensure no audio plays unless requested
-    if (SUCCEEDED(hr)) {
-        IMMDeviceCollection* pCollection = nullptr;
-        if (SUCCEEDED(pEnumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &pCollection))) {
-            UINT count = 0;
-            pCollection->GetCount(&count);
-            for (UINT i = 0; i < count; i++) {
-                IMMDevice* pEndpoint = nullptr;
-                if (SUCCEEDED(pCollection->Item(i, &pEndpoint))) {
-                    LPWSTR wstrId = nullptr;
-                    pEndpoint->GetId(&wstrId);
-                    QString id = QString::fromWCharArray(wstrId);
-                    CoTaskMemFree(wstrId);
 
-                    if (id != captureId) {
-                        IAudioEndpointVolume* pVol = nullptr;
-                        if (SUCCEEDED(pEndpoint->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void**)&pVol))) {
-                            pVol->SetMute(TRUE, nullptr);
-                            pVol->Release();
-                        }
-                    }
-                    pEndpoint->Release();
-                }
-            }
-            pCollection->Release();
-        }
-    }
 
-    // Ensure any sinks that are already targets are unmuted immediately
-    if (SUCCEEDED(hr)) {
-        QMutexLocker locker(&m_mutex);
-        for (const QString& sinkId : m_targetSinks) {
-            SetDeviceMute(pEnumerator, sinkId, false);
-        }
-    }
+
 
     if (SUCCEEDED(hr)) {
         hr = pDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&pAudioClient);
@@ -310,11 +278,6 @@ void AudioRouter::RouterThread::run()
 
             QSet<QString> removedTargets = activeTargetIds;
             removedTargets.subtract(targets);
-            for (const QString& id : removedTargets) {
-                if (id != captureId) {
-                    SetDeviceMute(pEnumerator, id, true);
-                }
-            }
             activeTargetIds = targets;
 
             // Remove old sinks
@@ -331,8 +294,7 @@ void AudioRouter::RouterThread::run()
             // Add new sinks
             for (const QString& id : targets) {
                 if (id == captureId) {
-                    SetDeviceMute(pEnumerator, id, false);
-                    qWarning() << "AudioRouter: Unmuting capture device as it is selected as a sink.";
+                    qWarning() << "AudioRouter: Capture device is selected as a sink.";
                     continue;
                 }
 
@@ -378,7 +340,6 @@ void AudioRouter::RouterThread::run()
                     if (SUCCEEDED(sHr)) {
                         ctx->valid = true;
                         activeSinks.append(ctx);
-                        // Unmute the device being added
                         SetDeviceMute(pEnumerator, id, false);
                         qDebug() << "AudioRouter: Added sink" << id;
                     } else {

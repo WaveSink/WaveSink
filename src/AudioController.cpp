@@ -11,7 +11,7 @@ AudioController::AudioController(QObject *parent)
         hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
             CLSCTX_ALL, __uuidof(IMMDeviceEnumerator),
             (void**)&m_enumerator);
-        
+
         if (FAILED(hr)) {
             qWarning() << "AudioController: Failed to create device enumerator. hr=" << hr;
         }
@@ -102,7 +102,7 @@ bool AudioController::setMute(const QString &sinkId, bool mute)
 bool AudioController::getMute(const QString &sinkId)
 {
     IAudioEndpointVolume *pVol = getEndpointVolume(sinkId);
-    if (!pVol) return false; 
+    if (!pVol) return false;
 
     BOOL mute = FALSE;
     HRESULT hr = pVol->GetMute(&mute);
